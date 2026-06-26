@@ -33,6 +33,17 @@ def port_in_use(port):
         return s.connect_ex(("127.0.0.1", int(port))) == 0
 
 
+def wait_until_up(port, timeout=25.0):
+    # poll the port until the server accepts connections, so the next process
+    # only starts once this one is actually ready
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if port_in_use(port):
+            return True
+        time.sleep(0.3)
+    return False
+
+
 def start(name, module, port):
     # start_new_session puts each child in its own process group so shutdown
     # can kill the whole tree (uvicorn workers included) and never orphan it.
@@ -71,16 +82,18 @@ if __name__ == "__main__":
     if busy:
         print(f"Ports already in use: {', '.join(busy)}.")
         print("Another run is probably still alive. Free them with:")
-        print(f"    lsof -ti tcp:{FAC_PORT},tcp:{MOCK_PORT} | xargs kill")
+        print(f"    lsof -t -i tcp:{FAC_PORT} -i tcp:{MOCK_PORT} | xargs kill")
         print("or set FAC_PORT / MOCK_PORT to different values, then retry.")
         sys.exit(1)
 
     print("Starting Federation Facilitator + operator GUI ...")
     start("facilitator", "backend.main:app", FAC_PORT)
-    time.sleep(2.0)
+    if not wait_until_up(FAC_PORT):
+        print("Facilitator did not come up in time. Check the output above.")
+        shutdown()
     print("Starting mock twin host (twins register themselves) ...")
     start("mock twins", "mock_twins.twin_host:app", MOCK_PORT)
-    time.sleep(2.0)
+    wait_until_up(MOCK_PORT)
 
     print("\n" + "=" * 56)
     print(f"  Operator GUI:        {FAC_URL}")

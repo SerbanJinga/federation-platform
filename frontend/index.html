@@ -479,6 +479,11 @@ function drawSparks(){
 }
 /* poll each twin's data endpoint directly, the direct runtime link */
 async function poll(){
+  // pick up twins that registered just after the page loaded
+  if(!twins.length){
+    try{ await loadTwins(); }catch(e){}
+    if(twins.length && document.getElementById('dashboard').classList.contains('active')) renderDash();
+  }
   await Promise.all(twins.map(async t=>{
     if(!t.data_url) return;
     try{
